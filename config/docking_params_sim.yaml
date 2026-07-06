@@ -25,9 +25,9 @@ docking_server:
       beta: 0.4
       lambda: 2.0
       v_linear_min: 0.06
-      v_linear_max: 0.10
+      v_linear_max: 0.18
       v_angular_max: 0.6
-      slowdown_radius: 0.8
+      slowdown_radius: 0.4
       use_collision_detection: false    # disable during final dock approach
 
     # ── Dock plugin registration ─────────────────────────────────────────
@@ -49,9 +49,9 @@ docking_server:
       external_detection_rotation_roll: 0.0
       filter_coef: 0.1                  # low-pass filter on detected pose
 
-      # Stop when robot center is close to the published safe approach pose.
-      # The estimator keeps this pose before the marker to avoid pushing the dock.
-      docking_threshold: 0.18           # m – tolerant stop window for simulation
+      # Stop when robot center is within 5 cm of the published dock pose.
+      # dock_pose_estimator offsets the target so 5 cm lands before contact.
+      docking_threshold: 0.05           # m – isDocked() = true threshold (5 cm, tolerante a erros do estimador)
 
       # Staging pose: 1.0 m in front of dock face (dock at 2.0 m, staging at ~1.0 m)
       staging_x_offset: -1.0            # m – negative = toward robot
