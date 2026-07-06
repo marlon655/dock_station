@@ -134,7 +134,7 @@ def _launch_description(*, use_sim_time, config_file_name, spawn_gazebo_dock):
         DeclareLaunchArgument('config_file', default_value=''),
         DeclareLaunchArgument('marker_id', default_value='771'),
         DeclareLaunchArgument('marker_size', default_value='0.15'),
-        DeclareLaunchArgument('stop_distance', default_value='0.30'),
+        DeclareLaunchArgument('stop_distance', default_value='0.55'),
         DeclareLaunchArgument('aruco_timeout', default_value='2.0'),
         DeclareLaunchArgument('sector_half_deg', default_value='30.0'),
         DeclareLaunchArgument('close_sector_deg', default_value='60.0'),

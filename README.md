@@ -149,6 +149,36 @@ low_after:=20.0        # quando battery <= low_after, volta para carregar
 emergency:=5.0         # bateria crítica durante tarefa
 ```
 
+
+## Ajustar Parada Antes Do Dock
+
+Na simulacao, a aproximacao final usa uma margem maior para evitar bater e
+continuar empurrando o dock:
+
+```bash
+ros2 launch aruco_docking docking_sim.launch.py stop_distance:=0.55
+```
+
+O `stop_distance` e a distancia entre o ArUco detectado e o alvo final publicado
+em `/detected_dock_pose`. Se ainda encostar, aumente para `0.65`. Se parar muito
+longe, reduza aos poucos, por exemplo `0.45`.
+
+A velocidade e a tolerancia final ficam em:
+
+```text
+src/aruco_docking/config/docking_params_sim.yaml
+```
+
+Campos principais:
+
+```yaml
+controller:
+  v_linear_max: 0.10
+  slowdown_radius: 0.8
+
+docking_threshold: 0.18
+```
+
 ## Robô Real / NUC
 
 No robô real, primeiro suba a navegação/hardware e depois o docking:
