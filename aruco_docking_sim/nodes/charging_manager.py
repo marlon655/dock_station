@@ -124,7 +124,6 @@ class ChargingManager(Node):
 
         # Parâmetros carregados pelo launch a partir de:
         #   config/docking_params_sim.yaml
-        #   config/docking_params_real.yaml
         # O launch ainda pode sobrescrever 'battery' para iniciar com uma carga específica.
         self.declare_parameter('battery', DEFAULT_BATTERY)
         self.declare_parameter('min_for_task', DEFAULT_MIN_FOR_TASK)

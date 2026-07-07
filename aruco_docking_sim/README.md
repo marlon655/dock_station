@@ -78,8 +78,8 @@ AMCL/Nav2 serve para localizacao e planejamento. A camera nao le esse mapa.
 Na simulacao, a tag vem do modelo Gazebo `charging_dock` instalado neste pacote:
 
 ```text
-aruco_docking/models/charging_dock/model.sdf
-aruco_docking/models/charging_dock/materials/textures/aruco_marker_771.png
+aruco_docking_sim/models/charging_dock/model.sdf
+aruco_docking_sim/models/charging_dock/materials/textures/aruco_marker_771.png
 ```
 
 Quando voce roda:
@@ -109,7 +109,7 @@ ros2 launch aruco_docking docking_sim.launch.py spawn_gazebo_dock:=false
 Na simulacao, a pose do dock fica no arquivo:
 
 ```text
-src/aruco_docking/config/docking_params_sim.yaml
+src/aruco_docking/aruco_docking_sim/config/docking_params_sim.yaml
 ```
 
 Altere este bloco:
@@ -169,18 +169,12 @@ emergency: 5.0         # bateria crítica durante tarefa
 
 ## Robô Real / NUC
 
-No robô real, primeiro suba a navegação/hardware e depois o docking:
+O uso no robô real fica no pacote separado `aruco_docking_real` deste mesmo
+repositório. Este pacote `aruco_docking` é somente para simulação/Gazebo.
 
 ```bash
-ros2 launch nav_hub essentials.launch.py mode:=hardware
+ros2 launch aruco_docking_real docking_real.launch.py battery:=100.0
 ```
-
-```bash
-ros2 launch aruco_docking docking_real.launch.py battery:=100.0
-```
-
-No hardware real, `spawn_gazebo_dock` fica `false`. Ajuste a pose real do
-carregador em `config/docking_params_real.yaml`, no frame fixo usado pelo Nav2.
 
 ## Tópicos Esperados
 
