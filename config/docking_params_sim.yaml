@@ -3,6 +3,22 @@
 #  for Palmares robot docking to base_carregamento via ArUco ID=771 + LiDAR
 # ══════════════════════════════════════════════════════════════════════════
 
+dock_pose_estimator:
+  ros__parameters:
+    marker_id: 771
+    marker_size: 0.15
+    stop_distance: 0.30
+    aruco_timeout: 2.0
+    sector_half_deg: 30.0
+    close_sector_deg: 60.0
+    close_range_m: 0.5
+
+charging_manager:
+  ros__parameters:
+    min_for_task: 40.0
+    low_after: 20.0
+    emergency: 5.0
+
 docking_server:
   ros__parameters:
     # ── Server ──────────────────────────────────────────────────────────

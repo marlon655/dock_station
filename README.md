@@ -126,6 +126,19 @@ essa pose deve estar no mesmo frame global usado pelo Nav2/route graph (`map`).
 A launch usa a mesma pose para inserir o modelo `charging_dock` no Gazebo e para
 configurar o `docking_server`.
 
+Os parametros fixos do detector ficam no mesmo YAML, em
+`dock_pose_estimator.ros__parameters`:
+
+```yaml
+marker_id: 771
+marker_size: 0.15
+stop_distance: 0.30
+aruco_timeout: 2.0
+sector_half_deg: 30.0
+close_sector_deg: 60.0
+close_range_m: 0.5
+```
+
 ## Ajustar Bateria Com O Nó Rodando
 
 Para mudar a porcentagem em runtime:
@@ -140,13 +153,18 @@ Para ler o valor publicado:
 ros2 topic echo /battery_level --once
 ```
 
-Parâmetros de bateria/decisão disponíveis:
+Parâmetro de bateria disponível no launch:
 
 ```bash
 battery:=30.0          # porcentagem atual/inicial
-min_for_task:=40.0     # mínimo para aceitar tarefa
-low_after:=20.0        # quando battery <= low_after, volta para carregar
-emergency:=5.0         # bateria crítica durante tarefa
+```
+
+Os thresholds de decisão ficam no YAML (`charging_manager.ros__parameters`):
+
+```yaml
+min_for_task: 40.0     # mínimo para aceitar tarefa
+low_after: 20.0        # quando battery <= low_after, volta para carregar
+emergency: 5.0         # bateria crítica durante tarefa
 ```
 
 ## Robô Real / NUC
@@ -158,7 +176,7 @@ ros2 launch nav_hub essentials.launch.py mode:=hardware
 ```
 
 ```bash
-ros2 launch aruco_docking docking_real.launch.py marker_size:=0.15 stop_distance:=0.30 battery:=100.0
+ros2 launch aruco_docking docking_real.launch.py battery:=100.0
 ```
 
 No hardware real, `spawn_gazebo_dock` fica `false`. Ajuste a pose real do

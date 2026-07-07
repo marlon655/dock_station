@@ -24,9 +24,6 @@ def _configured_nodes(context, *, use_sim_time_default, config_file_name, spawn_
     start_charging_manager = LaunchConfiguration('start_charging_manager')
     spawn_gazebo_dock = LaunchConfiguration('spawn_gazebo_dock')
     battery = LaunchConfiguration('battery')
-    min_for_task = LaunchConfiguration('min_for_task')
-    low_after = LaunchConfiguration('low_after')
-    emergency = LaunchConfiguration('emergency')
 
     with open(config_path, 'r', encoding='utf-8') as f:
         params = yaml.safe_load(f) or {}
@@ -81,15 +78,8 @@ def _configured_nodes(context, *, use_sim_time_default, config_file_name, spawn_
             executable='dock_pose_estimator.py',
             name='dock_pose_estimator',
             output='screen',
-            parameters=[{
+            parameters=[config_path, {
                 'use_sim_time': use_sim_time,
-                'marker_id': int(LaunchConfiguration('marker_id').perform(context)),
-                'marker_size': float(LaunchConfiguration('marker_size').perform(context)),
-                'stop_distance': float(LaunchConfiguration('stop_distance').perform(context)),
-                'aruco_timeout': float(LaunchConfiguration('aruco_timeout').perform(context)),
-                'sector_half_deg': float(LaunchConfiguration('sector_half_deg').perform(context)),
-                'close_sector_deg': float(LaunchConfiguration('close_sector_deg').perform(context)),
-                'close_range_m': float(LaunchConfiguration('close_range_m').perform(context)),
                 'target_frame': fixed_frame,
                 'dock_yaw': dock_yaw,
             }]),
@@ -117,12 +107,9 @@ def _configured_nodes(context, *, use_sim_time_default, config_file_name, spawn_
                 executable='charging_manager.py',
                 name='charging_manager',
                 output='screen',
-                parameters=[{
+                parameters=[config_path, {
                     'use_sim_time': use_sim_time,
                     'battery': battery,
-                    'min_for_task': min_for_task,
-                    'low_after': low_after,
-                    'emergency': emergency,
                 }])]),
     ])
     return nodes
@@ -132,18 +119,8 @@ def _launch_description(*, use_sim_time, config_file_name, spawn_gazebo_dock):
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value=str(use_sim_time).lower()),
         DeclareLaunchArgument('config_file', default_value=''),
-        DeclareLaunchArgument('marker_id', default_value='771'),
-        DeclareLaunchArgument('marker_size', default_value='0.15'),
-        DeclareLaunchArgument('stop_distance', default_value='0.30'),
-        DeclareLaunchArgument('aruco_timeout', default_value='2.0'),
-        DeclareLaunchArgument('sector_half_deg', default_value='30.0'),
-        DeclareLaunchArgument('close_sector_deg', default_value='60.0'),
-        DeclareLaunchArgument('close_range_m', default_value='0.5'),
         DeclareLaunchArgument('start_charging_manager', default_value='true'),
         DeclareLaunchArgument('battery', default_value='100.0'),
-        DeclareLaunchArgument('min_for_task', default_value='40.0'),
-        DeclareLaunchArgument('low_after', default_value='20.0'),
-        DeclareLaunchArgument('emergency', default_value='5.0'),
         DeclareLaunchArgument('spawn_gazebo_dock', default_value=str(spawn_gazebo_dock).lower()),
         OpaqueFunction(function=lambda context: _configured_nodes(
             context,
