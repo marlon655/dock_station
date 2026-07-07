@@ -53,7 +53,9 @@ class DockPoseEstimator(Node):
     def __init__(self):
         super().__init__('dock_pose_estimator')
 
-        # ── Parameters ────────────────────────────────────────────────────
+        # ── Parâmetros vindos do YAML ─────────────────────────────────────
+        # O launch carrega config/docking_params_sim.yaml ou docking_params_real.yaml.
+        # target_frame e dock_yaw são calculados no launch a partir da pose do dock.
         self.declare_parameter('marker_id',        771)
         self.declare_parameter('marker_size',      0.30)
         self.declare_parameter('stop_distance',    0.32)
@@ -61,9 +63,17 @@ class DockPoseEstimator(Node):
         self.declare_parameter('sector_half_deg',  30.0)
         self.declare_parameter('close_sector_deg', 60.0)
         self.declare_parameter('close_range_m',    0.5)
+        self.declare_parameter('yaw_filter_alpha', 0.35)
+        self.declare_parameter('tf_timeout',       0.15)
+        self.declare_parameter('scan_max_range',   2.5)
+        self.declare_parameter('center_band_deg',  20.0)
+        self.declare_parameter('face_range_tolerance', 0.10)
+        self.declare_parameter('front_x_tolerance', 0.08)
+        self.declare_parameter('min_lateral_spread', 0.15)
         self.declare_parameter('target_frame',     'odom')
         self.declare_parameter('dock_yaw',         0.0)
 
+        # Valores efetivos após aplicar YAML e sobrescritas do launch.
         self.MARKER_ID      = self.get_parameter('marker_id').value
         self.MARKER_SIZE    = self.get_parameter('marker_size').value
         self.STOP_DIST      = self.get_parameter('stop_distance').value
@@ -73,6 +83,15 @@ class DockPoseEstimator(Node):
         self.SECTOR_HALF    = math.radians(sector_deg)
         self.CLOSE_SECTOR   = math.radians(close_sector_deg)
         self.CLOSE_RANGE    = self.get_parameter('close_range_m').value
+        self.YAW_ALPHA      = float(self.get_parameter('yaw_filter_alpha').value)
+        self.TF_TIMEOUT     = float(self.get_parameter('tf_timeout').value)
+        self.SCAN_MAX_RANGE = float(self.get_parameter('scan_max_range').value)
+        center_band_deg     = float(self.get_parameter('center_band_deg').value)
+        self.CENTER_BAND    = math.radians(center_band_deg)
+        self.FACE_RANGE_TOL = float(self.get_parameter('face_range_tolerance').value)
+        self.FRONT_X_TOL    = float(self.get_parameter('front_x_tolerance').value)
+        self.MIN_LATERAL_SPREAD = float(self.get_parameter('min_lateral_spread').value)
+        # Estes dois acompanham docking_server.fixed_frame e base_carregamento.pose[2].
         self.TARGET_FRAME   = str(self.get_parameter('target_frame').value)
         self.DOCK_YAW       = float(self.get_parameter('dock_yaw').value)
 
@@ -110,7 +129,6 @@ class DockPoseEstimator(Node):
         self.last_aruco_t  = None    # rclpy.Time of last successful detection
         self.last_yaw      = 0.0     # remembered approach yaw [rad]
         self._filtered_yaw  = None    # EMA state for yaw smoothing
-        self._YAW_ALPHA     = 0.35    # EMA gain: lower = smoother but slower
         self.last_dock_pose = None    # (x, y) of dock face in target_frame from last ArUco
 
         # ── TF2 ───────────────────────────────────────────────────────────
@@ -200,7 +218,7 @@ class DockPoseEstimator(Node):
         try:
             pt_target = self.tf_buffer.transform(
                 pt_cam, self.TARGET_FRAME,
-                timeout=Duration(seconds=0.15))
+                timeout=Duration(seconds=self.TF_TIMEOUT))
         except TransformException as e:
             self.get_logger().warn(f'ArUco TF error: {e}', throttle_duration_sec=2.0)
             return
@@ -243,7 +261,7 @@ class DockPoseEstimator(Node):
             angle = msg.angle_min + i * msg.angle_increment
             if abs(angle) > self.SECTOR_HALF:
                 continue
-            if r < msg.range_min or r > min(msg.range_max, 2.5):
+            if r < msg.range_min or r > min(msg.range_max, self.SCAN_MAX_RANGE):
                 continue
             min_range = min(min_range, r)
 
@@ -262,7 +280,7 @@ class DockPoseEstimator(Node):
             angle = msg.angle_min + i * msg.angle_increment
             if abs(angle) > sector:
                 continue
-            if r < msg.range_min or r > min(msg.range_max, 2.5):
+            if r < msg.range_min or r > min(msg.range_max, self.SCAN_MAX_RANGE):
                 continue
             cluster_pts.append((r * math.cos(angle), r * math.sin(angle), r))
 
@@ -277,28 +295,27 @@ class DockPoseEstimator(Node):
         # land too far from the dock.
         # Fix: use only rays within ±20° of straight-ahead (atan2(y,x)≈0°) to
         # compute face_x — these see the flat front face cleanly at all Y offsets.
-        _CB = math.radians(20.0)
         center_band = [(x, y) for x, y, r in cluster_pts
-                       if abs(math.atan2(y, x)) <= _CB]
+                       if abs(math.atan2(y, x)) <= self.CENTER_BAND]
         if not center_band:
             center_band = [(x, y) for x, y, r in cluster_pts]
 
         cb_min_r = min(math.hypot(x, y) for x, y in center_band)
         cb_face  = [(x, y) for x, y in center_band
-                    if math.hypot(x, y) <= cb_min_r + 0.10]
+                    if math.hypot(x, y) <= cb_min_r + self.FACE_RANGE_TOL]
         face_x   = sum(p[0] for p in cb_face) / len(cb_face)
 
         # ── Y center from full lateral spread ─────────────────────────────────
         # Keep all near-surface points from the wide sector for Y; more spread
         # gives a better edge-to-edge centre estimate.
-        face_pts  = [(x, y) for x, y, r in cluster_pts if r < min_range + 0.20]
-        front_pts = [(x, y) for x, y in face_pts if x < face_x + 0.08]
+        face_pts  = [(x, y) for x, y, r in cluster_pts if r < min_range + (2.0 * self.FACE_RANGE_TOL)]
+        front_pts = [(x, y) for x, y in face_pts if x < face_x + self.FRONT_X_TOL]
         if len(front_pts) < 2:
             front_pts = face_pts
 
         y_vals = [p[1] for p in front_pts]
         y_min, y_max = min(y_vals), max(y_vals)
-        if y_max - y_min > 0.15:
+        if y_max - y_min > self.MIN_LATERAL_SPREAD:
             center_y = (y_min + y_max) / 2.0
         else:
             center_y = sum(y_vals) / len(y_vals)
@@ -314,7 +331,7 @@ class DockPoseEstimator(Node):
         try:
             pt_target = self.tf_buffer.transform(
                 pt_laser, self.TARGET_FRAME,
-                timeout=Duration(seconds=0.15))
+                timeout=Duration(seconds=self.TF_TIMEOUT))
         except TransformException as e:
             self.get_logger().warn(f'LiDAR TF error: {e}', throttle_duration_sec=2.0)
             return
@@ -385,7 +402,7 @@ class DockPoseEstimator(Node):
             self._filtered_yaw = yaw
             return yaw
         diff = (yaw - self._filtered_yaw + math.pi) % (2 * math.pi) - math.pi
-        self._filtered_yaw += self._YAW_ALPHA * diff
+        self._filtered_yaw += self.YAW_ALPHA * diff
         return self._filtered_yaw
 
     def _approach_yaw(self, target_x: float, target_y: float) -> float:

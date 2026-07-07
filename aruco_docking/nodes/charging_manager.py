@@ -122,13 +122,38 @@ class ChargingManager(Node):
     def __init__(self):
         super().__init__('charging_manager')
 
+        # Parâmetros carregados pelo launch a partir de:
+        #   config/docking_params_sim.yaml
+        #   config/docking_params_real.yaml
+        # O launch ainda pode sobrescrever 'battery' para iniciar com uma carga específica.
         self.declare_parameter('battery', DEFAULT_BATTERY)
         self.declare_parameter('min_for_task', DEFAULT_MIN_FOR_TASK)
         self.declare_parameter('low_after', DEFAULT_LOW_AFTER)
         self.declare_parameter('emergency', DEFAULT_EMERGENCY)
+        self.declare_parameter('dock_max_fails', DOCK_MAX_FAILS)
+        self.declare_parameter('docked_pose_x', DOCK_X_ODOM)
+        self.declare_parameter('docked_pose_y', DOCK_Y_ODOM)
+        self.declare_parameter('align_tolerance_xy', ALIGN_TOL_XY)
+        self.declare_parameter('centering_sample_s', CTR_SAMPLE_S)
+        self.declare_parameter('centering_dead_band', CTR_DEAD_BAND)
+        self.declare_parameter('centering_max_correction', CTR_MAX_CORR)
+        self.declare_parameter('undock_speed', UNDOCK_SPEED)
+        self.declare_parameter('undock_duration', UNDOCK_DURATION)
+
+        # A partir daqui, o nó usa sempre os valores efetivos dos parâmetros ROS.
+        # Se o YAML mudar, basta rebuild/source e relançar o pacote.
         self._min_for_task = float(self.get_parameter('min_for_task').value)
         self._low_after = float(self.get_parameter('low_after').value)
         self._emergency = float(self.get_parameter('emergency').value)
+        self._dock_max_fails = int(self.get_parameter('dock_max_fails').value)
+        self._docked_pose_x = float(self.get_parameter('docked_pose_x').value)
+        self._docked_pose_y = float(self.get_parameter('docked_pose_y').value)
+        self._align_tolerance_xy = float(self.get_parameter('align_tolerance_xy').value)
+        self._centering_sample_s = float(self.get_parameter('centering_sample_s').value)
+        self._centering_dead_band = float(self.get_parameter('centering_dead_band').value)
+        self._centering_max_correction = float(self.get_parameter('centering_max_correction').value)
+        self._undock_speed = float(self.get_parameter('undock_speed').value)
+        self._undock_duration = float(self.get_parameter('undock_duration').value)
 
         self._state             = STARTUP
         self._battery           = self._clamp_pct(float(self.get_parameter('battery').value))
@@ -175,6 +200,8 @@ class ChargingManager(Node):
         return max(0.0, min(100.0, float(value)))
 
     def _on_param_update(self, params):
+        # Permite ajustar em runtime com `ros2 param set /charging_manager ...`.
+        # Os mesmos nomes abaixo também existem no YAML de configuração.
         for param in params:
             if param.name == 'battery':
                 self._battery = self._clamp_pct(param.value)
@@ -185,6 +212,24 @@ class ChargingManager(Node):
                 self._low_after = self._clamp_pct(param.value)
             elif param.name == 'emergency':
                 self._emergency = self._clamp_pct(param.value)
+            elif param.name == 'dock_max_fails':
+                self._dock_max_fails = max(1, int(param.value))
+            elif param.name == 'docked_pose_x':
+                self._docked_pose_x = float(param.value)
+            elif param.name == 'docked_pose_y':
+                self._docked_pose_y = float(param.value)
+            elif param.name == 'align_tolerance_xy':
+                self._align_tolerance_xy = max(0.0, float(param.value))
+            elif param.name == 'centering_sample_s':
+                self._centering_sample_s = max(0.1, float(param.value))
+            elif param.name == 'centering_dead_band':
+                self._centering_dead_band = max(0.0, float(param.value))
+            elif param.name == 'centering_max_correction':
+                self._centering_max_correction = max(0.0, float(param.value))
+            elif param.name == 'undock_speed':
+                self._undock_speed = float(param.value)
+            elif param.name == 'undock_duration':
+                self._undock_duration = max(0.0, float(param.value))
         return SetParametersResult(successful=True)
 
     def _once(self, delay: float, fn):
@@ -313,7 +358,7 @@ class ChargingManager(Node):
         self._centering_samples = []
         self._centering_sub = self.create_subscription(
             PoseStamped, '/detected_dock_pose', self._ctr_pose_cb, 10)
-        self._centering_timer = self.create_timer(CTR_SAMPLE_S, self._centering_done)
+        self._centering_timer = self.create_timer(self._centering_sample_s, self._centering_done)
 
     def _ctr_pose_cb(self, msg: PoseStamped):
         if self._state == CENTERING:
@@ -328,9 +373,9 @@ class ChargingManager(Node):
             self.get_logger().warn('Sem amostras — pulando centering.')
             self._start_docking(); return
         err = sum(self._centering_samples) / len(self._centering_samples) - STAGING_Y
-        if abs(err) < CTR_DEAD_BAND:
+        if abs(err) < self._centering_dead_band:
             self._start_docking(); return
-        cy = STAGING_Y + max(-CTR_MAX_CORR, min(CTR_MAX_CORR, err))
+        cy = STAGING_Y + max(-self._centering_max_correction, min(self._centering_max_correction, err))
         self._nav.send_goal_async(
             _nav_goal(_make_pose(STAGING_X, cy, STAGING_YAW))
         ).add_done_callback(self._ctr_nav_cb)
@@ -371,16 +416,16 @@ class ChargingManager(Node):
         # Posição atual para log e proteção contra HOME_CHARGING longe do dock
         rx   = self._robot_x or 0.0
         ry   = self._robot_y or 0.0
-        dist = math.sqrt((rx - DOCK_X_ODOM)**2 + (ry - DOCK_Y_ODOM)**2)
+        dist = math.sqrt((rx - self._docked_pose_x)**2 + (ry - self._docked_pose_y)**2)
 
         if f.result().status != 4:
             self._dock_retries += 1
             self.get_logger().warn(
-                f'DockRobot falhou ({self._dock_retries}/{DOCK_MAX_FAILS}) '
+                f'DockRobot falhou ({self._dock_retries}/{self._dock_max_fails}) '
                 f'dist={dist:.2f}m pos=({rx:.1f},{ry:.1f})')
-            if self._dock_retries >= DOCK_MAX_FAILS:
+            if self._dock_retries >= self._dock_max_fails:
                 self._dock_retries = 0
-                if dist <= ALIGN_TOL_XY:
+                if dist <= self._align_tolerance_xy:
                     self.get_logger().warn(
                         f'Máx retries — robô perto do dock (dist={dist:.2f}m) → HOME_CHARGING.')
                     self._set_state(HOME_CHARGING)
@@ -402,11 +447,11 @@ class ChargingManager(Node):
     def _start_undocking(self):
         self._set_state(UNDOCKING)
         self.get_logger().info(
-            f'Recuando da dock ({abs(UNDOCK_SPEED):.2f} m/s × {UNDOCK_DURATION:.1f} s)…')
+            f'Recuando da dock ({abs(self._undock_speed):.2f} m/s × {self._undock_duration:.1f} s)…')
         cmd = Twist()
-        cmd.linear.x = UNDOCK_SPEED
+        cmd.linear.x = self._undock_speed
         self._vel_pub.publish(cmd)
-        self._once(UNDOCK_DURATION, self._undock_done)
+        self._once(self._undock_duration, self._undock_done)
 
     def _undock_done(self):
         if self._state != UNDOCKING:

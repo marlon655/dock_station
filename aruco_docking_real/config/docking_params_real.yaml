@@ -1,0 +1,105 @@
+# ══════════════════════════════════════════════════════════════════════════
+#  Parâmetros de docking simulado do Palmares
+#  DockingServer + SimpleChargingDock usando ArUco ID=771 e LiDAR
+# ══════════════════════════════════════════════════════════════════════════
+
+# Nó que detecta a tag ArUco e/ou a face do dock pelo LiDAR e publica
+# /detected_dock_pose para o plugin SimpleChargingDock.
+dock_pose_estimator:
+  ros__parameters:
+    marker_id: 771              # ID da tag ArUco esperada no carregador.
+    marker_size: 0.15           # Tamanho físico da tag ArUco em metros.
+    stop_distance: 0.40         # Distância antes da tag onde o alvo de aproximação é publicado.
+    aruco_timeout: 2.0          # Tempo sem ver ArUco antes de usar apenas o LiDAR como fallback.
+    sector_half_deg: 30.0       # Meia abertura frontal do LiDAR usada na busca normal do dock.
+    close_sector_deg: 60.0      # Meia abertura frontal maior usada quando o robô está perto do dock.
+    close_range_m: 0.5          # Distância abaixo da qual o setor maior do LiDAR é usado.
+    yaw_filter_alpha: 0.35      # Ganho do filtro de suavização do yaw detectado.
+    tf_timeout: 0.15            # Tempo máximo aguardando transformação TF em segundos.
+    scan_max_range: 2.5         # Alcance máximo do LiDAR usado na detecção do dock.
+    center_band_deg: 20.0       # Faixa central do LiDAR usada para estimar a distância frontal.
+    face_range_tolerance: 0.10  # Tolerância em metros para agrupar pontos da face do dock.
+    front_x_tolerance: 0.08     # Tolerância em X para selecionar pontos da face frontal.
+    min_lateral_spread: 0.15    # Largura mínima para usar centro entre bordas laterais.
+
+# Nó que publica bateria, decide retorno ao dock e dispara a ação DockRobot.
+charging_manager:
+  ros__parameters:
+    min_for_task: 40.0          # Bateria mínima para aceitar ou iniciar tarefas.
+    low_after: 20.0             # Se battery <= low_after, o robô retorna ao dock.
+    emergency: 5.0              # Bateria crítica: aborta tarefa e força retorno ao dock.
+    dock_max_fails: 4           # Número de falhas de docking antes de aplicar a lógica de retry longo.
+    docked_pose_x: 12.7         # X esperado do robô quando está dockado, usado só para validação/log.
+    docked_pose_y: 0.0          # Y esperado do robô quando está dockado, usado só para validação/log.
+    align_tolerance_xy: 2.0     # Raio em metros para considerar o robô perto do dock após falhas.
+    centering_sample_s: 2.0     # Tempo coletando amostras de /detected_dock_pose para centralização.
+    centering_dead_band: 0.05   # Erro lateral abaixo do qual a centralização é ignorada.
+    centering_max_correction: 0.30 # Correção lateral máxima aplicada antes do docking.
+    undock_speed: -0.15         # Velocidade linear usada no recuo simples de undock.
+    undock_duration: 2.0        # Duração do recuo simples de undock em segundos.
+
+# Servidor de docking do Nav2/OpenNav. Controla a aproximação final até o dock.
+docking_server:
+  ros__parameters:
+    # ── Servidor ─────────────────────────────────────────────────────────
+    controller_frequency: 50.0          # Frequência do loop de controle do docking em Hz.
+    initial_perception_timeout: 8.0     # Tempo máximo aguardando a primeira detecção do dock.
+    wait_charge_timeout: 5.0            # Tempo aguardando confirmação de carga após dockar.
+    dock_approach_timeout: 45.0         # Tempo máximo permitido para a aproximação final.
+    undock_linear_tolerance: 0.05       # Tolerância linear para considerar undock concluído.
+    undock_angular_tolerance: 0.05      # Tolerância angular para considerar undock concluído.
+    max_retries: 3                      # Número de tentativas internas antes de falhar a ação.
+    base_frame: base_link               # Frame base do robô usado pelo docking_server.
+    fixed_frame: map                    # Frame global fixo usado pelo docking e pelo Nav2.
+    dock_backwards: false               # false = aproxima de frente; true = aproxima de ré.
+    dock_prestaging_tolerance: 0.5      # Raio aceito para considerar que chegou ao pré-staging.
+
+    # ── Controlador de aproximação final ─────────────────────────────────
+    controller:
+      k_phi: 3.0                        # Ganho angular para alinhar a direção de aproximação.
+      k_delta: 2.0                      # Ganho angular para corrigir erro lateral/orientação.
+      beta: 0.4                         # Peso de suavização da lei de controle.
+      lambda: 2.0                       # Ganho de convergência do controlador.
+      v_linear_min: 0.06                # Velocidade linear mínima durante a aproximação.
+      v_linear_max: 0.12                # Velocidade linear máxima durante a aproximação.
+      v_angular_max: 0.6                # Velocidade angular máxima durante a aproximação.
+      slowdown_radius: 0.7              # Raio onde o robô começa a reduzir a velocidade.
+      use_collision_detection: false    # Desativa checagem de colisão na aproximação final simulada.
+
+    # ── Registro do plugin de dock ───────────────────────────────────────
+    dock_plugins: ['charging_dock']      # Lista de tipos de dock disponíveis para o servidor.
+
+    charging_dock:
+      plugin: 'opennav_docking::SimpleChargingDock'  # Plugin usado para este tipo de dock.
+
+      # O SimpleChargingDock usa a pose publicada pelo nosso detector externo.
+      use_external_detection_pose: true              # Usa /detected_dock_pose em vez de detectar internamente.
+      external_detection_timeout: 2.0                # Tempo máximo sem pose externa antes de considerar stale.
+
+      # Offsets aplicados sobre a pose externa. Mantidos quase zerados porque
+      # o dock_pose_estimator já publica o alvo de aproximação correto.
+      external_detection_translation_x: 0.0          # Offset X aplicado à pose detectada.
+      external_detection_translation_y: -0.04        # Offset Y para compensar pequeno erro lateral do sensor.
+      external_detection_rotation_yaw: 0.0           # Offset de yaw aplicado à pose detectada.
+      external_detection_rotation_pitch: 0.0         # Offset de pitch aplicado à pose detectada.
+      external_detection_rotation_roll: 0.0          # Offset de roll aplicado à pose detectada.
+      filter_coef: 0.1                               # Filtro passa-baixa aplicado à pose detectada.
+
+      # Critério de parada do docking.
+      docking_threshold: 0.05           # Distância até a pose alvo para considerar dockado.
+
+      # Pose de pré-staging calculada a partir da pose do dock.
+      staging_x_offset: -1.0            # Distância antes do dock para iniciar a aproximação final.
+      staging_yaw_offset: 0.0           # Offset angular aplicado à pose de staging.
+
+      # Na simulação não existe estado físico real de carga/stall.
+      use_battery_status: false         # Não espera sensor físico de bateria para confirmar dock.
+      use_stall_detection: false        # Não usa stall dos motores para confirmar contato.
+
+    # ── Banco de docks disponíveis ───────────────────────────────────────
+    docks: ['base_carregamento']        # Instâncias de dock conhecidas pelo docking_server.
+
+    base_carregamento:
+      type: 'charging_dock'             # Tipo/plugin usado por esta instância de dock.
+      frame: 'map'                      # Frame da pose abaixo.
+      pose: [4.30, -24.57, -1.849560]   # Pose [x, y, yaw] do dock no mapa; também usada no spawn do Gazebo.

@@ -12,12 +12,28 @@ dock_pose_estimator:
     sector_half_deg: 30.0
     close_sector_deg: 60.0
     close_range_m: 0.5
+    yaw_filter_alpha: 0.35
+    tf_timeout: 0.15
+    scan_max_range: 2.5
+    center_band_deg: 20.0
+    face_range_tolerance: 0.10
+    front_x_tolerance: 0.08
+    min_lateral_spread: 0.15
 
 charging_manager:
   ros__parameters:
     min_for_task: 40.0
     low_after: 20.0
     emergency: 5.0
+    dock_max_fails: 4
+    docked_pose_x: 12.7
+    docked_pose_y: 0.0
+    align_tolerance_xy: 2.0
+    centering_sample_s: 2.0
+    centering_dead_band: 0.05
+    centering_max_correction: 0.30
+    undock_speed: -0.15
+    undock_duration: 2.0
 
 docking_server:
   ros__parameters:
