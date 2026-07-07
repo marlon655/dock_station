@@ -7,7 +7,7 @@ opennav_docking SimpleChargingDock plugin.
 
 Phase 1 – ArUco (long range, ~0.3 m → ~3 m):
   Detects ArUco marker ID=771 (DICT_4X4_1000) on the charging base via the
-  RGB camera.  Computes the marker centre position in the configured target frame, then
+  RGB camera.  Computes the marker centre position in odom frame, then
   publishes a robot approach pose that is STOP_DISTANCE metres in front of
   the marker (so the robot stops ~5 cm from the base face).
 
@@ -47,15 +47,38 @@ import tf2_ros
 import tf2_geometry_msgs  # registers PoseStamped / PointStamped transformers
 from tf2_ros import TransformException
 
+ARUCO_DICT = {
+	"DICT_4X4_50": cv2.aruco.DICT_4X4_50,
+	"DICT_4X4_100": cv2.aruco.DICT_4X4_100,
+	"DICT_4X4_250": cv2.aruco.DICT_4X4_250,
+	"DICT_4X4_1000": cv2.aruco.DICT_4X4_1000,
+	"DICT_5X5_50": cv2.aruco.DICT_5X5_50,
+	"DICT_5X5_100": cv2.aruco.DICT_5X5_100,
+	"DICT_5X5_250": cv2.aruco.DICT_5X5_250,
+	"DICT_5X5_1000": cv2.aruco.DICT_5X5_1000,
+	"DICT_6X6_50": cv2.aruco.DICT_6X6_50,
+	"DICT_6X6_100": cv2.aruco.DICT_6X6_100,
+	"DICT_6X6_250": cv2.aruco.DICT_6X6_250,
+	"DICT_6X6_1000": cv2.aruco.DICT_6X6_1000,
+	"DICT_7X7_50": cv2.aruco.DICT_7X7_50,
+	"DICT_7X7_100": cv2.aruco.DICT_7X7_100,
+	"DICT_7X7_250": cv2.aruco.DICT_7X7_250,
+	"DICT_7X7_1000": cv2.aruco.DICT_7X7_1000,
+	"DICT_ARUCO_ORIGINAL": cv2.aruco.DICT_ARUCO_ORIGINAL,
+	"DICT_APRILTAG_16h5": cv2.aruco.DICT_APRILTAG_16h5,
+	"DICT_APRILTAG_25h9": cv2.aruco.DICT_APRILTAG_25h9,
+	"DICT_APRILTAG_36h10": cv2.aruco.DICT_APRILTAG_36h10,
+	"DICT_APRILTAG_36h11": cv2.aruco.DICT_APRILTAG_36h11
+}
+
 
 class DockPoseEstimator(Node):
 
     def __init__(self):
         super().__init__('dock_pose_estimator')
 
-        # ── Parâmetros vindos do YAML ─────────────────────────────────────
-        # O launch carrega config/docking_params_sim.yaml ou docking_params_real.yaml.
-        # target_frame e dock_yaw são calculados no launch a partir da pose do dock.
+        # ── Parameters ────────────────────────────────────────────────────
+        self.declare_parameter('marker_dict',      'DICT_4X4_1000')
         self.declare_parameter('marker_id',        771)
         self.declare_parameter('marker_size',      0.30)
         self.declare_parameter('stop_distance',    0.32)
@@ -63,17 +86,8 @@ class DockPoseEstimator(Node):
         self.declare_parameter('sector_half_deg',  30.0)
         self.declare_parameter('close_sector_deg', 60.0)
         self.declare_parameter('close_range_m',    0.5)
-        self.declare_parameter('yaw_filter_alpha', 0.35)
-        self.declare_parameter('tf_timeout',       0.15)
-        self.declare_parameter('scan_max_range',   2.5)
-        self.declare_parameter('center_band_deg',  20.0)
-        self.declare_parameter('face_range_tolerance', 0.10)
-        self.declare_parameter('front_x_tolerance', 0.08)
-        self.declare_parameter('min_lateral_spread', 0.15)
-        self.declare_parameter('target_frame',     'odom')
-        self.declare_parameter('dock_yaw',         0.0)
 
-        # Valores efetivos após aplicar YAML e sobrescritas do launch.
+        self.MARKER_DICT    = self.get_parameter('marker_dict').value 
         self.MARKER_ID      = self.get_parameter('marker_id').value
         self.MARKER_SIZE    = self.get_parameter('marker_size').value
         self.STOP_DIST      = self.get_parameter('stop_distance').value
@@ -83,31 +97,13 @@ class DockPoseEstimator(Node):
         self.SECTOR_HALF    = math.radians(sector_deg)
         self.CLOSE_SECTOR   = math.radians(close_sector_deg)
         self.CLOSE_RANGE    = self.get_parameter('close_range_m').value
-        self.YAW_ALPHA      = float(self.get_parameter('yaw_filter_alpha').value)
-        self.TF_TIMEOUT     = float(self.get_parameter('tf_timeout').value)
-        self.SCAN_MAX_RANGE = float(self.get_parameter('scan_max_range').value)
-        center_band_deg     = float(self.get_parameter('center_band_deg').value)
-        self.CENTER_BAND    = math.radians(center_band_deg)
-        self.FACE_RANGE_TOL = float(self.get_parameter('face_range_tolerance').value)
-        self.FRONT_X_TOL    = float(self.get_parameter('front_x_tolerance').value)
-        self.MIN_LATERAL_SPREAD = float(self.get_parameter('min_lateral_spread').value)
-        # Estes dois acompanham docking_server.fixed_frame e base_carregamento.pose[2].
-        self.TARGET_FRAME   = str(self.get_parameter('target_frame').value)
-        self.DOCK_YAW       = float(self.get_parameter('dock_yaw').value)
 
         # ── ArUco detector (DICT_4X4_1000 includes ID 771)
-        # OpenCV 4.7+ renamed the ArUco factory helpers; keep compatibility
-        # with older ROS/OpenCV packages used on some installs.
-        if hasattr(cv2.aruco, 'getPredefinedDictionary'):
-            self._aruco_dict = cv2.aruco.getPredefinedDictionary(
-                cv2.aruco.DICT_4X4_1000)
-        else:
-            self._aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_1000)
-
-        if hasattr(cv2.aruco, 'DetectorParameters'):
-            self._aruco_params = cv2.aruco.DetectorParameters()
-        else:
-            self._aruco_params = cv2.aruco.DetectorParameters_create()
+        # OpenCV 4.6 legacy API: Dictionary_get + DetectorParameters_create
+        self._aruco_dict   = cv2.aruco.Dictionary_get(ARUCO_DICT[self.MARKER_DICT])
+        #self._aruco_dict   = cv2.aruco.Dictionary_get(cv2.aruco.DICT_APRILTAG_16h5)
+        #self._aruco_dict   = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_1000)
+        self._aruco_params = cv2.aruco.DetectorParameters_create()
         # Tuned for Gazebo rendering: lower threshold constant improves
         # detection when black/white contrast is reduced by ambient lighting.
         self._aruco_params.adaptiveThreshConstant = 3
@@ -129,7 +125,8 @@ class DockPoseEstimator(Node):
         self.last_aruco_t  = None    # rclpy.Time of last successful detection
         self.last_yaw      = 0.0     # remembered approach yaw [rad]
         self._filtered_yaw  = None    # EMA state for yaw smoothing
-        self.last_dock_pose = None    # (x, y) of dock face in target_frame from last ArUco
+        self._YAW_ALPHA     = 0.35    # EMA gain: lower = smoother but slower
+        self.last_dock_odom = None    # (ox, oy) of dock face in odom from last ArUco
 
         # ── TF2 ───────────────────────────────────────────────────────────
         self.tf_buffer   = tf2_ros.Buffer()
@@ -151,10 +148,9 @@ class DockPoseEstimator(Node):
 
         self.get_logger().info(
             f'DockPoseEstimator ready  '
-            f'(marker={self.MARKER_ID}, size={self.MARKER_SIZE} m, '
+            f'(dict={self.MARKER_DICT} marker={self.MARKER_ID}, size={self.MARKER_SIZE} m, '
             f'stop_dist={self.STOP_DIST} m, '
             f'aruco_timeout={self.ARUCO_TIMEOUT} s, '
-            f'target_frame={self.TARGET_FRAME}, dock_yaw={math.degrees(self.DOCK_YAW):.1f}°, '
             f'sector={math.degrees(self.SECTOR_HALF):.0f}°/'
             f'{math.degrees(self.CLOSE_SECTOR):.0f}°)')
 
@@ -193,7 +189,7 @@ class DockPoseEstimator(Node):
 
         idx = int(np.where(ids_flat == self.MARKER_ID)[0][0])
         img_pts = corners[idx].reshape(4, 2).astype(np.float32)
-
+        #self.get_logger().info('!!! I got image !!')
         # Estimate marker pose in camera_link_optical frame
         ok, rvec, tvec = cv2.solvePnP(
             self.obj_pts, img_pts,
@@ -213,22 +209,25 @@ class DockPoseEstimator(Node):
         pt_cam.point.x = float(tvec[0])
         pt_cam.point.y = float(tvec[1])
         pt_cam.point.z = float(tvec[2])
-
-        # Transform marker centre to target frame
+        self.get_logger().info(f'tvecs: x[{tvec[0]}] y[{tvec[1]}] z[{tvec[2]}]', throttle_duration_sec=0.5)
+        # Transform marker centre to odom frame
         try:
-            pt_target = self.tf_buffer.transform(
-                pt_cam, self.TARGET_FRAME,
-                timeout=Duration(seconds=self.TF_TIMEOUT))
+            pt_odom = self.tf_buffer.transform(
+                pt_cam, 'odom',
+                timeout=Duration(seconds=0.15))
         except TransformException as e:
             self.get_logger().warn(f'ArUco TF error: {e}', throttle_duration_sec=2.0)
             return
 
-        mx, my = pt_target.point.x, pt_target.point.y
+        mx, my = pt_odom.point.x, pt_odom.point.y
 
-        yaw = self._smooth_yaw(self.DOCK_YAW)
+        # Choose a heading that points from the robot toward the detected dock marker.
+        # This gives the robot a meaningful orientation for coarse alignment before the
+        # docking controller takes over.
+        yaw = self._smooth_yaw(self._approach_yaw(mx, my))
         self.last_yaw       = yaw
         self.last_aruco_t   = self.get_clock().now()
-        self.last_dock_pose = (mx, my)   # ArUco is truth for dock center
+        self.last_dock_odom = (mx, my)   # ArUco is truth for dock center
 
         # Target pose: STOP_DIST metres before the marker
         dock_pose = self._make_pose_stamped(
@@ -261,7 +260,7 @@ class DockPoseEstimator(Node):
             angle = msg.angle_min + i * msg.angle_increment
             if abs(angle) > self.SECTOR_HALF:
                 continue
-            if r < msg.range_min or r > min(msg.range_max, self.SCAN_MAX_RANGE):
+            if r < msg.range_min or r > min(msg.range_max, 2.5):
                 continue
             min_range = min(min_range, r)
 
@@ -280,7 +279,7 @@ class DockPoseEstimator(Node):
             angle = msg.angle_min + i * msg.angle_increment
             if abs(angle) > sector:
                 continue
-            if r < msg.range_min or r > min(msg.range_max, self.SCAN_MAX_RANGE):
+            if r < msg.range_min or r > min(msg.range_max, 2.5):
                 continue
             cluster_pts.append((r * math.cos(angle), r * math.sin(angle), r))
 
@@ -295,27 +294,28 @@ class DockPoseEstimator(Node):
         # land too far from the dock.
         # Fix: use only rays within ±20° of straight-ahead (atan2(y,x)≈0°) to
         # compute face_x — these see the flat front face cleanly at all Y offsets.
+        _CB = math.radians(20.0)
         center_band = [(x, y) for x, y, r in cluster_pts
-                       if abs(math.atan2(y, x)) <= self.CENTER_BAND]
+                       if abs(math.atan2(y, x)) <= _CB]
         if not center_band:
             center_band = [(x, y) for x, y, r in cluster_pts]
 
         cb_min_r = min(math.hypot(x, y) for x, y in center_band)
         cb_face  = [(x, y) for x, y in center_band
-                    if math.hypot(x, y) <= cb_min_r + self.FACE_RANGE_TOL]
+                    if math.hypot(x, y) <= cb_min_r + 0.10]
         face_x   = sum(p[0] for p in cb_face) / len(cb_face)
 
         # ── Y center from full lateral spread ─────────────────────────────────
         # Keep all near-surface points from the wide sector for Y; more spread
         # gives a better edge-to-edge centre estimate.
-        face_pts  = [(x, y) for x, y, r in cluster_pts if r < min_range + (2.0 * self.FACE_RANGE_TOL)]
-        front_pts = [(x, y) for x, y in face_pts if x < face_x + self.FRONT_X_TOL]
+        face_pts  = [(x, y) for x, y, r in cluster_pts if r < min_range + 0.20]
+        front_pts = [(x, y) for x, y in face_pts if x < face_x + 0.08]
         if len(front_pts) < 2:
             front_pts = face_pts
 
         y_vals = [p[1] for p in front_pts]
         y_min, y_max = min(y_vals), max(y_vals)
-        if y_max - y_min > self.MIN_LATERAL_SPREAD:
+        if y_max - y_min > 0.15:
             center_y = (y_min + y_max) / 2.0
         else:
             center_y = sum(y_vals) / len(y_vals)
@@ -329,24 +329,26 @@ class DockPoseEstimator(Node):
         pt_laser.point.z = 0.0
 
         try:
-            pt_target = self.tf_buffer.transform(
-                pt_laser, self.TARGET_FRAME,
-                timeout=Duration(seconds=self.TF_TIMEOUT))
+            pt_odom = self.tf_buffer.transform(
+                pt_laser, 'odom',
+                timeout=Duration(seconds=0.15))
         except TransformException as e:
             self.get_logger().warn(f'LiDAR TF error: {e}', throttle_duration_sec=2.0)
             return
 
         # X (stop distance): always from LiDAR face detection
-        ox = pt_target.point.x
+        ox = pt_odom.point.x
 
         # Y (lateral centering): ArUco is the truth — use last known dock Y.
         # LiDAR edge detection only when ArUco was never seen (e.g., too dark).
-        if self.last_dock_pose is not None:
-            oy = self.last_dock_pose[1]
+        if self.last_dock_odom is not None:
+            oy = self.last_dock_odom[1]
         else:
-            oy = pt_target.point.y  # LiDAR fallback (no ArUco ever)
+            oy = pt_odom.point.y  # LiDAR fallback (no ArUco ever)
 
-        yaw = self._smooth_yaw(self.DOCK_YAW)
+        # For LiDAR fallback, use the same heading logic so the robot still knows
+        # which way to face the dock even when ArUco is temporarily unavailable.
+        yaw = self._smooth_yaw(self._approach_yaw(ox, oy))
 
         dock_pose = self._make_pose_stamped(
             ox - self.STOP_DIST * math.cos(yaw),
@@ -357,7 +359,7 @@ class DockPoseEstimator(Node):
         self.dock_pub.publish(dock_pose)
         self.get_logger().info(
             f'LiDAR: face_x={ox:.3f} dock_y={oy:.3f} '
-            f'({"ArUco" if self.last_dock_pose else "LiDAR"}) '
+            f'({"ArUco" if self.last_dock_odom else "LiDAR"}) '
             f'range={min_range:.3f} yaw={math.degrees(yaw):.1f}°',
             throttle_duration_sec=0.5)
 
@@ -386,10 +388,10 @@ class DockPoseEstimator(Node):
         return robot_yaw + math.atan2(normal[1], normal[0])
 
     def _robot_yaw(self) -> float:
-        """Yaw atual do robô no target_frame via TF target_frame→base_footprint."""
+        """Yaw atual do robô em odom via TF odom→base_footprint."""
         try:
             tf = self.tf_buffer.lookup_transform(
-                self.TARGET_FRAME, 'base_footprint', rclpy.time.Time())
+                'odom', 'base_footprint', rclpy.time.Time())
             qz = tf.transform.rotation.z
             qw = tf.transform.rotation.w
             return 2.0 * math.atan2(qz, qw)
@@ -402,23 +404,24 @@ class DockPoseEstimator(Node):
             self._filtered_yaw = yaw
             return yaw
         diff = (yaw - self._filtered_yaw + math.pi) % (2 * math.pi) - math.pi
-        self._filtered_yaw += self.YAW_ALPHA * diff
+        self._filtered_yaw += self._YAW_ALPHA * diff
         return self._filtered_yaw
 
     def _approach_yaw(self, target_x: float, target_y: float) -> float:
         """Yaw angle (rad, odom frame) the robot must face to approach target."""
         try:
             tf = self.tf_buffer.lookup_transform(
-                self.TARGET_FRAME, 'base_footprint', rclpy.time.Time())
+                'odom', 'base_footprint', rclpy.time.Time())
             rx = tf.transform.translation.x
             ry = tf.transform.translation.y
         except TransformException:
             rx, ry = 0.0, 0.0
         return math.atan2(target_y - ry, target_x - rx)
 
-    def _make_pose_stamped(self, x: float, y: float, yaw: float, stamp) -> PoseStamped:
+    @staticmethod
+    def _make_pose_stamped(x: float, y: float, yaw: float, stamp) -> PoseStamped:
         ps = PoseStamped()
-        ps.header.frame_id      = self.TARGET_FRAME
+        ps.header.frame_id      = 'odom'
         ps.header.stamp         = stamp
         ps.pose.position.x      = x
         ps.pose.position.y      = y
