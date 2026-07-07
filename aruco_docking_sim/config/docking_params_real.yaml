@@ -92,34 +92,3 @@ docking_server:
       # No physical battery state in simulation – use position threshold only.
       use_battery_status: false
       use_stall_detection: false
-
-    # ── Dock database ────────────────────────────────────────────────────
-    docks: ['base_carregamento']
-
-    base_carregamento:
-      type: 'charging_dock'
-      frame: 'odom'
-      # Ajustar para a pose real do dock no frame fixo usado pelo Nav2.
-      pose: [0.0, 0.0, 0.0]
-
-  usb_cam:
-    video_device: "/dev/video0"
-    image_width: 640
-    image_height: 480
-    pixel_format: "mjpeg2rgb"     # MJPG → RGB8; se falhar tentar "yuyv2rgb"
-    camera_frame_id: "camera_link_optical"
-    io_method: "mmap"
-    framerate: 30.0
-
-    # Auto-controles
-    auto_white_balance: true
-    auto_exposure: true
-    autofocus: false              # C270 tem foco fixo
-
-    # Arquivo de calibração — o launch file sobrescreve este valor com o caminho
-    # absoluto resolvido via os.path.expanduser('~') para evitar hardcodar o usuário
-    camera_info_url: "file://home/ubuntu/.ros/camera_info/c270.yaml"
-
-    # Deve corresponder ao gz_frame_id da simulação: "camera_link_optical"
-    camera_name: "camera"
-    frame_id: "camera_link_optical"

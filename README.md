@@ -4,7 +4,7 @@ Repositório com os pacotes de docking por ArUco/LiDAR do Palmares.
 
 ## Pacotes
 
-- `aruco_docking`: pacote para simulação, com launch de Gazebo, modelo do dock e parâmetros simulados.
+- `aruco_docking` (`aruco_docking_sim/`): pacote para simulação, com launch de Gazebo, modelo do dock e parâmetros simulados.
 - `aruco_docking_real`: pacote separado para o robô real, sem Gazebo e sem dependência do `sim_bot`.
 
 ## Simulação
