@@ -16,6 +16,7 @@ def _bool_text(value):
 
 def _configured_nodes(context, *, use_sim_time_default, config_file_name, spawn_gazebo_dock_default):
     pkg = get_package_share_directory('aruco_docking')
+    calib_url = f'file://{home}/.ros/camera_info/c270.yaml'
     config_path = LaunchConfiguration('config_file').perform(context)
     if not config_path:
         config_path = os.path.join(pkg, 'config', config_file_name)
@@ -90,6 +91,20 @@ def _configured_nodes(context, *, use_sim_time_default, config_file_name, spawn_
             output='screen',
             parameters=[config_path, {'use_sim_time': use_sim_time}],
             remappings=[('/tf', '/tf'), ('/tf_static', '/tf_static')]),
+        Node(
+            package='usb_cam',
+            executable='usb_cam_node_exe',
+            name='usb_cam',
+            output='screen',
+            parameters=[
+                config_path,
+                {'camera_info_url': calib_url},    # sobrescreve o caminho do YAML
+            ],
+            remappings=[
+                # dock_pose_estimator assina /camera/image e /camera/camera_info
+                ('/image_raw',   '/camera/image'),
+                ('/camera_info', '/camera/camera_info'),
+            ]),
         Node(
             package='nav2_lifecycle_manager',
             executable='lifecycle_manager',
