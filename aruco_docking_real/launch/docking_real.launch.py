@@ -3,9 +3,10 @@ import yaml
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, GroupAction, OpaqueFunction
+from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription, OpaqueFunction
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 
 
@@ -21,6 +22,7 @@ def _configured_nodes(context):
 
     use_sim_time = _bool_text(LaunchConfiguration('use_sim_time').perform(context))
     start_charging_manager = LaunchConfiguration('start_charging_manager')
+    start_camera = LaunchConfiguration('start_camera')
     battery = LaunchConfiguration('battery')
 
     camera_image_topic = LaunchConfiguration('camera_image_topic')
@@ -44,6 +46,11 @@ def _configured_nodes(context):
     fixed_frame = str(server_params.get('fixed_frame', server_params.get(dock_id, {}).get('frame', 'odom')))
 
     return [
+        GroupAction(
+            condition=IfCondition(start_camera),
+            actions=[IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    os.path.join(pkg, 'launch', 'camera_real.launch.py')))]),
         Node(
             package='aruco_docking_real',
             executable='dock_pose_estimator.py',
@@ -99,6 +106,7 @@ def generate_launch_description():
         DeclareLaunchArgument('use_sim_time', default_value='false'),
         DeclareLaunchArgument('config_file', default_value=''),
         DeclareLaunchArgument('start_charging_manager', default_value='true'),
+        DeclareLaunchArgument('start_camera', default_value='true'),
         DeclareLaunchArgument('battery', default_value='100.0'),
         DeclareLaunchArgument('camera_image_topic', default_value='/camera/image'),
         DeclareLaunchArgument('camera_info_topic', default_value='/camera/camera_info'),
