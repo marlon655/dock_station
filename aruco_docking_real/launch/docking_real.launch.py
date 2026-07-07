@@ -50,7 +50,11 @@ def _configured_nodes(context):
             condition=IfCondition(start_camera),
             actions=[IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
-                    os.path.join(pkg, 'launch', 'camera_real.launch.py')))]),
+                    os.path.join(pkg, 'launch', 'camera_real.launch.py')),
+                launch_arguments={
+                    'camera_image_topic': camera_image_topic,
+                    'camera_info_topic': camera_info_topic,
+                }.items())]),
         Node(
             package='aruco_docking_real',
             executable='dock_pose_estimator.py',
