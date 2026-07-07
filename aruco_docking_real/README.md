@@ -76,3 +76,18 @@ Verifique se o detector está publicando pose:
 ```bash
 ros2 topic echo /detected_dock_pose
 ```
+
+## Câmera USB opcional
+
+Se o robô real usa `usb_cam`, este pacote também instala um launch auxiliar:
+
+```bash
+ros2 launch aruco_docking_real camera_real.launch.py
+```
+
+Ele publica/remapeia a câmera para os tópicos esperados pelo detector:
+
+```text
+/camera/image
+/camera/camera_info
+```

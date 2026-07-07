@@ -96,10 +96,11 @@ docking_server:
       use_battery_status: false         # Não espera sensor físico de bateria para confirmar dock.
       use_stall_detection: false        # Não usa stall dos motores para confirmar contato.
 
-    # ── Banco de docks disponíveis ───────────────────────────────────────
-    docks: ['base_carregamento']        # Instâncias de dock conhecidas pelo docking_server.
+    # ── Dock database ────────────────────────────────────────────────────
+    docks: ['base_carregamento']
 
     base_carregamento:
-      type: 'charging_dock'             # Tipo/plugin usado por esta instância de dock.
-      frame: 'map'                      # Frame da pose abaixo.
-      pose: [4.30, -24.57, -1.849560]   # Pose [x, y, yaw] do dock no mapa; também usada no spawn do Gazebo.
+      type: 'charging_dock'
+      frame: 'odom'
+      # Ajustar para a pose real do dock no frame fixo usado pelo Nav2.
+      pose: [0.0, 0.0, 0.0]
