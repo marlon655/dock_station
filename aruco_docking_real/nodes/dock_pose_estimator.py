@@ -189,7 +189,6 @@ class DockPoseEstimator(Node):
 
         idx = int(np.where(ids_flat == self.MARKER_ID)[0][0])
         img_pts = corners[idx].reshape(4, 2).astype(np.float32)
-        #self.get_logger().info('!!! I got image !!')
         # Estimate marker pose in camera_link_optical frame
         ok, rvec, tvec = cv2.solvePnP(
             self.obj_pts, img_pts,
@@ -209,7 +208,7 @@ class DockPoseEstimator(Node):
         pt_cam.point.x = float(tvec[0])
         pt_cam.point.y = float(tvec[1])
         pt_cam.point.z = float(tvec[2])
-        self.get_logger().info(f'tvecs: x[{tvec[0]}] y[{tvec[1]}] z[{tvec[2]}]', throttle_duration_sec=0.5)
+        #self.get_logger().info(f'tvecs: x[{tvec[0]}] y[{tvec[1]}] z[{tvec[2]}]', throttle_duration_sec=0.5)
         # Transform marker centre to odom frame
         try:
             pt_odom = self.tf_buffer.transform(
