@@ -7,8 +7,9 @@
 # /detected_dock_pose para o plugin SimpleChargingDock.
 dock_pose_estimator:
   ros__parameters:
-    marker_id: 771              # ID da tag ArUco esperada no carregador.
-    marker_size: 0.15           # Tamanho físico da tag ArUco em metros.
+    marker_dict: "DICT_APRILTAG_16h5" # Tipo de dicionário de tags ArUco usado para detectar o dock.
+    marker_id: 4                 # ID da tag ArUco a ser detectada.
+    marker_size': 0.1502         # Tamanho físico da tag ArUco em metros.
     stop_distance: 0.40         # Distância antes da tag onde o alvo de aproximação é publicado.
     aruco_timeout: 2.0          # Tempo sem ver ArUco antes de usar apenas o LiDAR como fallback.
     sector_half_deg: 30.0       # Meia abertura frontal do LiDAR usada na busca normal do dock.
