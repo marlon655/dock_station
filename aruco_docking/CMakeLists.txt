@@ -16,7 +16,6 @@ install(
   PROGRAMS
     nodes/dock_pose_estimator.py
     nodes/charging_manager.py
-    nodes/alignment_test.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
