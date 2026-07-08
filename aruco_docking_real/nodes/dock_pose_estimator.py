@@ -41,7 +41,6 @@ from rclpy.duration import Duration
 from sensor_msgs.msg import Image, CameraInfo, LaserScan
 from geometry_msgs.msg import PoseStamped, PointStamped
 
-from cv_bridge import CvBridge
 
 import tf2_ros
 import tf2_geometry_msgs  # registers PoseStamped / PointStamped transformers
@@ -132,9 +131,6 @@ class DockPoseEstimator(Node):
         self.tf_buffer   = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
 
-        # ── CvBridge ──────────────────────────────────────────────────────
-        self.bridge = CvBridge()
-
         # ── Subscribers ────────────────────────────────────────────────────
         self.create_subscription(
             CameraInfo, 'camera/camera_info', self._camera_info_cb, 10)
@@ -171,11 +167,12 @@ class DockPoseEstimator(Node):
         if self.camera_matrix is None:
             return
 
-        # Convert to grey-scale
+        # Convert to grey-scale without cv_bridge. On some ARM/NUC installs,
+        # cv_bridge can segfault inside native code when camera frames arrive.
         try:
-            gray = self.bridge.imgmsg_to_cv2(msg, desired_encoding='mono8')
-        except Exception as e:
-            self.get_logger().warn(f'cv_bridge error: {e}')
+            gray = self._image_to_gray(msg)
+        except ValueError as e:
+            self.get_logger().warn(str(e), throttle_duration_sec=2.0)
             return
 
         corners, ids, _ = cv2.aruco.detectMarkers(
@@ -240,6 +237,58 @@ class DockPoseEstimator(Node):
             f'ArUco: dock=({mx:.3f},{my:.3f}) target=({dock_pose.pose.position.x:.3f},'
             f'{dock_pose.pose.position.y:.3f}) yaw={math.degrees(yaw):.1f}°',
             throttle_duration_sec=0.5)
+
+
+    def _image_to_gray(self, msg: Image):
+        encoding = (msg.encoding or '').lower()
+        height = int(msg.height)
+        width = int(msg.width)
+        step = int(msg.step)
+
+        if height <= 0 or width <= 0:
+            raise ValueError('Camera image has invalid dimensions.')
+
+        data = np.frombuffer(msg.data, dtype=np.uint8)
+
+        if encoding in ('mono8', '8uc1'):
+            channels = 1
+            expected_step = width
+        elif encoding in ('rgb8', 'bgr8'):
+            channels = 3
+            expected_step = width * channels
+        elif encoding in ('rgba8', 'bgra8'):
+            channels = 4
+            expected_step = width * channels
+        else:
+            raise ValueError(
+                f'Unsupported camera encoding {msg.encoding!r}; expected rgb8, bgr8, mono8, rgba8 or bgra8.')
+
+        if step < expected_step:
+            raise ValueError(
+                f'Camera image step too small for encoding {msg.encoding!r}: step={step}, expected>={expected_step}.')
+
+        needed = step * height
+        if data.size < needed:
+            raise ValueError(
+                f'Camera image data too small: got={data.size}, expected={needed}.')
+
+        rows = data[:needed].reshape((height, step))
+        packed = rows[:, :expected_step]
+
+        if channels == 1:
+            return packed.reshape((height, width)).copy()
+
+        image = packed.reshape((height, width, channels))
+        if encoding == 'rgb8':
+            return cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+        if encoding == 'bgr8':
+            return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        if encoding == 'rgba8':
+            return cv2.cvtColor(image, cv2.COLOR_RGBA2GRAY)
+        if encoding == 'bgra8':
+            return cv2.cvtColor(image, cv2.COLOR_BGRA2GRAY)
+
+        raise ValueError(f'Unsupported camera encoding {msg.encoding!r}.')
 
     # ─────────────────────────────────────────────────────────────────────
     # Scan callback – LiDAR fallback (Phase 2)
@@ -321,7 +370,7 @@ class DockPoseEstimator(Node):
 
         # Build PointStamped for the dock face centre in laser_frame
         pt_laser = PointStamped()
-        pt_laser.header.frame_id = 'laser_frame'
+        pt_laser.header.frame_id = 'base_laser'
         pt_laser.header.stamp    = rclpy.time.Time().to_msg()
         pt_laser.point.x = face_x
         pt_laser.point.y = center_y

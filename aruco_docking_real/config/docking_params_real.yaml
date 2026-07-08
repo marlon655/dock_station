@@ -1,5 +1,5 @@
 # ══════════════════════════════════════════════════════════════════════════
-#  Parâmetros de docking simulado do Palmares
+#  Parâmetros de docking real do Palmares
 #  DockingServer + SimpleChargingDock usando ArUco ID=771 e LiDAR
 # ══════════════════════════════════════════════════════════════════════════
 
@@ -9,19 +9,12 @@ dock_pose_estimator:
   ros__parameters:
     marker_dict: "DICT_APRILTAG_16h5" # Tipo de dicionário de tags ArUco usado para detectar o dock.
     marker_id: 4                 # ID da tag ArUco a ser detectada.
-    marker_size': 0.1502         # Tamanho físico da tag ArUco em metros.
+    marker_size: 0.1502         # Tamanho físico da tag ArUco em metros.
     stop_distance: 0.40         # Distância antes da tag onde o alvo de aproximação é publicado.
     aruco_timeout: 2.0          # Tempo sem ver ArUco antes de usar apenas o LiDAR como fallback.
     sector_half_deg: 30.0       # Meia abertura frontal do LiDAR usada na busca normal do dock.
     close_sector_deg: 60.0      # Meia abertura frontal maior usada quando o robô está perto do dock.
     close_range_m: 0.5          # Distância abaixo da qual o setor maior do LiDAR é usado.
-    yaw_filter_alpha: 0.35      # Ganho do filtro de suavização do yaw detectado.
-    tf_timeout: 0.15            # Tempo máximo aguardando transformação TF em segundos.
-    scan_max_range: 2.5         # Alcance máximo do LiDAR usado na detecção do dock.
-    center_band_deg: 20.0       # Faixa central do LiDAR usada para estimar a distância frontal.
-    face_range_tolerance: 0.10  # Tolerância em metros para agrupar pontos da face do dock.
-    front_x_tolerance: 0.08     # Tolerância em X para selecionar pontos da face frontal.
-    min_lateral_spread: 0.15    # Largura mínima para usar centro entre bordas laterais.
 
 # Nó que publica bateria, decide retorno ao dock e dispara a ação DockRobot.
 charging_manager:
@@ -102,6 +95,6 @@ docking_server:
 
     base_carregamento:
       type: 'charging_dock'
-      frame: 'odom'
+      frame: 'map'
       # Ajustar para a pose real do dock no frame fixo usado pelo Nav2.
       pose: [0.0, 0.0, 0.0]
