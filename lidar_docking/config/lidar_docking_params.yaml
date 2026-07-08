@@ -1,0 +1,61 @@
+lidar_dock_detector:
+  ros__parameters:
+    scan_topic: scan
+    base_frame: base_link
+    dock_pose_topic: detected_dock_pose
+
+    # Dock fisico: painel plano de 40 x 40 cm visto pelo LiDAR 2D.
+    panel_width: 0.40
+    panel_width_tolerance: 0.12
+    robot_width: 0.50
+    robot_length: 0.50
+
+    # Busca do painel na frente do robo.
+    sector_half_deg: 70.0
+    min_detect_range: 0.18
+    max_detect_range: 1.80
+    max_lateral_search: 0.75
+    cluster_gap: 0.08
+    min_cluster_points: 5
+
+    # Ajuste da linha da face plana.
+    max_line_rmse: 0.035
+    max_face_yaw_deg: 25.0
+    max_stale_scan_s: 0.5
+    publish_rate_hz: 15.0
+
+lidar_docking_manager:
+  ros__parameters:
+    destination_topic: destination
+    reached_topic: has_reached
+    dock_pose_topic: detected_dock_pose
+    cmd_vel_topic: cmd_vel
+
+    # Sequencia do ponto de staging no arquivo JSON usado pelo route graph.
+    # Ajuste para o no do grafo que fica de frente para o dock, a ~0.8-1.2 m.
+    dock_destination_sequence: 16
+    auto_start: false
+
+    nav_timeout_s: 120.0
+    detection_timeout_s: 2.0
+    docking_timeout_s: 45.0
+
+    # Robo 50 x 50 cm: para o centro do base_link, parar a ~25 cm + folga.
+    robot_length: 0.50
+    contact_clearance: 0.03
+    final_distance_tolerance: 0.015
+    lateral_tolerance: 0.025
+    yaw_tolerance_deg: 4.0
+
+    # Sem guia fisico: se o erro estiver maior que estes limites, o robo
+    # gira parado para recentralizar antes de voltar a avancar.
+    drive_lateral_tolerance: 0.06
+    drive_yaw_tolerance_deg: 10.0
+    near_panel_distance: 0.45
+
+    linear_gain: 0.7
+    lateral_gain: 1.8
+    yaw_gain: 1.2
+    max_linear_speed: 0.05
+    min_linear_speed: 0.010
+    max_angular_speed: 0.45
