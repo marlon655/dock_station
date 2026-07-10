@@ -103,14 +103,21 @@ src/lidar_auto_docking/config/autodock_params.yaml
 Parâmetros principais:
 
 ```yaml
-docked_distance_threshold: 0.30
+docked_distance_threshold: 0.47
+abort_distance: 0.57
+abort_angle: 0.09
+y_abort_threshold: 0.05
+connector_clearance_distance: 0.30
 dock_lateral_offset: -0.05
 dock_yaw_offset: 0.03
 retries: 10
 docking_timeout_sec: 300.0
+
+undocking_server:
+  connector_clearance_distance: 0.25
 ```
 
-- `docked_distance_threshold`: distância final em que o docking considera sucesso.
+- `docked_distance_threshold`: distância entre o dock e o `base_link`, localizado aproximadamente no centro da carroceria. Com `0.47 m`, descontando cerca de `0.27 m` do centro até a borda do robô, restam aproximadamente `0.20 m` entre a carroceria e a estação.
 - `dock_lateral_offset`: correção lateral fina no frame do dock.
 - `dock_yaw_offset`: correção angular fina no alvo final.
 - `docking_timeout_sec`: tempo máximo da action de docking.
