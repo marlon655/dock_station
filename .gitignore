@@ -1,0 +1,19 @@
+# ROS 2 / colcon generated directories
+build/
+install/
+log/
+
+# Python caches and test artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
+# Local Codex/agent workspace metadata
+.agents/
+.codex/
+
+# Editor and operating-system files
+*~
+*.swp
+.DS_Store

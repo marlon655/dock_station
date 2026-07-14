@@ -1,0 +1,77 @@
+/**:
+  ros__parameters:
+    # Distancia maxima, em metros, entre pontos consecutivos do LaserScan para
+    # que eles sejam agrupados no mesmo cluster durante a deteccao do dock.
+    # Esta secao comum atende tanto docking_server quanto dock_coordinates.
+    cluster_tolerance: 0.05
+
+    # Rotacao circular aplicada somente a copia local do LaserScan usada pela
+    # percepcao do dock. Move a emenda logica de 0/360 graus para tras do robo,
+    # sem alterar ou republicar o topico /scan original.
+    scan_rotation_deg: 180.0
+
+    # Imprime todos os clusters e a geometria detalhada do candidato escolhido.
+    # Deve permanecer falso durante a operacao normal para evitar excesso de log.
+    debug_clusters: false
+
+    # Configuracao do backend e do cliente de terminal do dock pose saver.
+    detection_timeout_sec: 1.0
+    map_frame: map
+    base_frame: base_link
+    # Zero mantem a tela em modo manual: os dados continuam sendo recebidos,
+    # mas a interface so e redesenhada quando R e pressionado. Um valor
+    # positivo reativa a atualizacao automatica (limitada a 2 Hz).
+    display_refresh_hz: 0.0
+
+docking_server:
+  ros__parameters:
+    # Quantidade maxima de tentativas de aproximacao. Uma tentativa e consumida
+    # quando o robo detecta uma aproximacao ruim, recua e tenta novamente.
+    retries: 10
+
+    # Tempo maximo, em segundos, para concluir toda a acao de docking.
+    # Ao exceder este tempo, o servidor cancela o docking mesmo que ainda
+    # existam tentativas disponiveis.
+    docking_timeout_sec: 300.0
+
+    # Distancia, em metros, entre o dock detectado e o base_link a partir da
+    # qual os limites de erro lateral e angular passam a ser verificados.
+    # Deve ser maior que docked_distance_threshold. Com 0.57 e 0.47, a janela
+    # de validacao final possui 0.10 m.
+    abort_distance: 0.57
+
+    # Erro angular maximo permitido, em radianos, dentro da janela de
+    # validacao. Se abs(yaw) ultrapassar 0.09 rad (aprox. 5.2 graus), o robo
+    # considera a aproximacao ruim, recua e tenta novamente.
+    abort_angle: 0.09
+
+    # Desvio lateral maximo permitido, em metros, dentro da janela de
+    # validacao. Se abs(y) ultrapassar 0.05 m, a aproximacao e refeita.
+    y_abort_threshold: 0.05
+
+    # Distancia de recuo, em metros, usada somente na recuperacao de uma
+    # aproximacao ruim. O robo recua este valor, corrige o yaw e depois executa
+    # o segundo recuo calculado internamente por backupDistance() (min. 0.20 m).
+    # Este parametro nao e usado depois de um docking bem-sucedido.
+    connector_clearance_distance: 0.30
+
+    # Distancia final, em metros, entre o dock detectado e o base_link,
+    # localizado aproximadamente no centro da carroceria. Ao atingir um valor
+    # menor ou igual a 0.47 m, o servidor informa "DOCK REACHED" e para.
+    docked_distance_threshold: 0.47
+
+    # Correcao lateral aplicada ao alvo no frame do dock, em metros. Valores
+    # negativos deslocam o alvo para o lado direito do robo; positivos, para o
+    # lado esquerdo. Compensa um erro lateral sistematico da aproximacao.
+    dock_lateral_offset: 0.0 #0.05
+
+    # Correcao angular aplicada ao alvo final, em radianos. Valores positivos
+    # giram o alvo no sentido anti-horario; negativos, no sentido horario.
+    dock_yaw_offset: 0.01 #0.3
+
+undocking_server:
+  ros__parameters:
+    # Distancia que o robo recua, em metros e medida pela odometria, quando uma
+    # acao de undocking e solicitada. Este parametro e independente do valor de
+    # mesmo nome em docking_server e nao inclui o segundo recuo de recuperacao.
+    connector_clearance_distance: 0.25

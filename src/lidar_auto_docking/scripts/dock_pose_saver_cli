@@ -1,0 +1,8 @@
+#!/usr/bin/env python3
+"""Terminal entry point for the dock pose saver."""
+
+from lidar_auto_docking.dock_pose_saver_cli import main
+
+
+if __name__ == '__main__':
+    main()
