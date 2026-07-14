@@ -17,7 +17,9 @@ def generate_launch_description():
     config = os.path.join(current_dir, "config", "autodock_params.yaml")
 
     # goal file to load poses from
-    dock_pose_file = "init_dock.json"
+    # Arquivo gerado pelo dock pose saver. Ele contem tanto a pose da dock
+    # (x/y/z/w) quanto a pose de pre-dock do robo (bx/by/bz/bw).
+    dock_pose_file = "dock_ws_dock.json"
 
     load_file_path = os.path.join(
         get_package_share_directory("lidar_auto_docking"),

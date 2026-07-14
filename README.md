@@ -119,29 +119,35 @@ cat ~/dock_robot_ws/src/lidar_auto_docking/initial_dock_pose/dock_ws_dock.json
 Antes de enviar o docking, use Nav2 ou conduza o robô até ficar de frente para
 a dock, aproximadamente entre `1.0 m` e `1.5 m` dela.
 
-### Terminal 1 — servidor de docking
+### Iniciar o servidor e enviar o goal
 
 ```bash
 source /opt/ros/jazzy/setup.bash
 source ~/dock_robot_ws/install/local_setup.bash
 
-ros2 launch lidar_auto_docking autodock_launch.py
+ros2 launch lidar_auto_docking dockrobot_launch.py
 ```
 
-Mantenha esse terminal aberto durante toda a operação.
+Esse launch inicia o servidor `auto_dock`, lê `dock_ws_dock.json` e envia
+automaticamente a action `/Dock`. O controlador publica diretamente em
+`/cmd_vel`.
 
-### Terminal 2 — enviar o goal salvo
+Mantenha esse terminal aberto durante toda a operação. O resultado esperado
+termina com o goal concluído e `DOCK REACHED`.
+
+### Executar o undocking
+
+Depois que o docking terminar, mantenha `dockrobot_launch.py` aberto e execute
+em outro terminal:
 
 ```bash
 source /opt/ros/jazzy/setup.bash
 source ~/dock_robot_ws/install/local_setup.bash
 
-ros2 launch lidar_auto_docking dock_ws_send_goal.launch.py
+ros2 run lidar_auto_docking undock_robot.py
 ```
 
-O cliente lê `dock_ws_dock.json`, envia a action `/Dock` e o servidor assume a
-aproximação final. O resultado esperado termina com o goal concluído e
-`DOCK REACHED`.
+Não inicie outro servidor enquanto `dockrobot_launch.py` estiver rodando.
 
 ## 6. Alterar parâmetros
 
